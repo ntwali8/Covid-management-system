@@ -237,14 +237,34 @@ int main(int argc, char const *argv[])
                 send(new_socket, out, strlen(out), 0);
             }
         }
+        else if (result = strstr(buffer, "exit"))
+        {
+            printf("\nClosing session on client request\n");
+            hello = "exit";
+            send(new_socket, hello, strlen(hello), 0);
+        }
+        else if (result = strstr(buffer, ""))
+        {
+            //impelement code to keep the server running
+            //waiting for a new connection after the client closes.
+            //for now it just terminates
+            //removing the code below causes an infinite loop
+            printf("\nClosed\n");
+            hello = "\nclosed";
+            send(new_socket, hello, strlen(hello), 0);
+            
+        }
         else
         {
             printf("\nInvalid command recieved.");
+            printf("\n(%s)", buffer);
             hello = "\nInvalid command!.\nPlease try again";
             send(new_socket, hello, strlen(hello), 0);
         }
 
-    } while (buffer != "Exit" || buffer != "exit");
+        //remove the new line from command(buffer) to check if its exit
+		//buffer[strcspn(buffer, "\n")] = 0;
+    } while ( (strcmp(buffer, "Exit") != 0) && (strcmp(buffer, "exit") != 0) );
     return 0;
 }
 
