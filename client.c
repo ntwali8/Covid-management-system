@@ -1,4 +1,6 @@
-
+//TODO: Where command is entered. add a console output
+//requesting user for input
+//not just a blank as it is now
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>

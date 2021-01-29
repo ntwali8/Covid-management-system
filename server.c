@@ -237,11 +237,97 @@ int main(int argc, char const *argv[])
                 send(new_socket, out, strlen(out), 0);
             }
         }
+        else if (strncmp(buffer, "Search", 6) == 0)
+        {
+            //get command minus the Search word.
+            result2 = strchr(buffer, ' ');
+            result2 += 1;
+            //remove the newline char at the end.
+            result3 = strtok(result2, "\n");
+            //result3 is the search term
+
+            char line[200] = {0};
+            char **resultsArray = NULL;
+            int count = 0; //array index counter
+
+            //get each line
+            fp = fopen(result6, "r");
+            if (!fp)
+            {
+                printf("Failed to open dstrict file for search\n");
+                hello = "District file missing.\nFailed to check status\n";
+                send(new_socket, hello, strlen(hello), 0);
+            }
+            else
+            {
+                printf("\nSearching file...\n");
+                while (fgets(line, 200, fp))
+                {
+                    line[strcspn(line, "\n")] = 0; //removes the new line character
+
+                    //Structure of line is:
+                    //Sirname Firstname Date Gender Status HOname
+                    //remove HOname, Status and Gender using this for loop.
+                    // since they are not part of the criteria.
+                    //There are 3 spaces after Date thats why loop runs 3 times
+                    //Loop removes everything after a space starting from the end.
+                    for (int i = 0; i < 3; i++)
+                    {
+                        char *del = &line[strlen(line)];
+
+                        while (del > line && *del != ' ')
+                            del--;
+
+                        if (*del == ' ')
+                            *del = '\0';
+                    }
+                    //New line contains only Sirname, Firstname and date.
+                    //check for query word in line
+                    if (strstr(line, result3) != NULL)
+                    {
+                        //adding results to array of results.
+                        count++;
+                        resultsArray = (char **)realloc(resultsArray, (count + 1) * sizeof(*resultsArray));
+                        resultsArray[count - 1] = (char *)malloc(sizeof(line));
+                        strcpy(resultsArray[count - 1], line);
+                    }
+                }
+                printf("Search complete!\n");
+                //gave it a very large size to accomodate very large search results.
+                //incase we have very many search results to print to the client.
+                char out[2097152];
+                if (!resultsArray)
+                {
+                    printf("No results found\n");
+                    strcpy(out, "No results found");
+                    send(new_socket, out, strlen(out), 0);
+                }
+                else
+                {
+                    printf("%d Result(s) found, sending results...\n", count);
+                    snprintf(out, sizeof(out), "%d Result(s) found\n", count);
+                    strcat(out, "====================\n");
+                    int i = 0;
+                    while (i < count)
+                    {
+                        char resultLine[1024];
+                        snprintf(resultLine, sizeof(resultLine), "%s\n", resultsArray[i]);
+                        strcat(out, resultLine);
+                        i++;
+                    }
+                    strcat(out, "====================");
+
+                    send(new_socket, out, strlen(out), 0);
+                }
+                fclose(fp);
+            }
+        }
         else if (result = strstr(buffer, "exit"))
         {
             printf("\nClosing session on client request\n");
             hello = "exit";
             send(new_socket, hello, strlen(hello), 0);
+            break;
         }
         else if (result = strstr(buffer, ""))
         {
@@ -250,9 +336,7 @@ int main(int argc, char const *argv[])
             //for now it just terminates
             //removing the code below causes an infinite loop
             printf("\nClosed\n");
-            hello = "\nclosed";
-            send(new_socket, hello, strlen(hello), 0);
-            
+            break; //adding this break exits the loop
         }
         else
         {
@@ -263,9 +347,9 @@ int main(int argc, char const *argv[])
         }
 
         //remove the new line from command(buffer) to check if its exit
-		//buffer[strcspn(buffer, "\n")] = 0;
-    } while ( (strcmp(buffer, "Exit") != 0) && (strcmp(buffer, "exit") != 0) );
-    return 0;
+        //buffer[strcspn(buffer, "\n")] = 0;
+    } while ((strcmp(buffer, "Exit") != 0) && (strcmp(buffer, "exit") != 0));
+    //return 0;
 }
 
 void replaceeverychar(char *str, char oldChar, char newChar)
