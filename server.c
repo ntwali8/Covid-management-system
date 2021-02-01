@@ -4,111 +4,211 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
-#define mkstr(s) #s
 #define PORT 8080
 
-struct patientDetails
-{
-    char name[12];
-    char signature[12];
-};
+int fdmax, sockfd, nsockfd;
+fd_set master;
+int headerprinted = 0;
+char *filename = {0};
+
 void replaceeverychar(char *str, char oldChar, char newChar);
 void replacefirstchar(char *str, char oldChar, char newChar);
 void replacefirstcharWithString(char *str, char *oldChar, char *newStr);
 
-int main(int argc, char const *argv[])
+void connect_await(int *socketInit, struct sockaddr_in *address)
 {
-    int server_fd, new_socket, valread, valread1;
-    struct sockaddr_in address;
     int opt = 1;
-    int addrlen = sizeof(address);
-    char buffer[1024] = {0};
-    char message[1024];
-    int length;
-    char *result;
-    char *result1;
-    char *result2;
-    char *result3;
-    char *agentname;
-
-    char district[12] = {0};
-    char username[12] = {0};
-    char signature[12] = {0};
-    struct patientDetails t;
-
-    char sign2[15] = {0};
-    char result4[1024] = "";
-    char result5[100] = "";
-    char *result6 = {0};
-    char *result7 = {0};
-    char reading[1024] = "";
-    char reading1[1024] = "";
-    char *first;
-    FILE *fp, *fPt;
-
-    char *hello = {0};
-    char sign1[15] = {0};
-    int i = 0;
-    int j = 0;
-    int check = 0;
 
     // Creating socket file descriptor
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
+    if ((*socketInit = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
 
     // Forcefully attaching socket to the port 8080
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
+    if (setsockopt(*socketInit, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
                    &opt, sizeof(opt)))
     {
         perror("setsockopt");
         exit(EXIT_FAILURE);
     }
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+    address->sin_family = AF_INET;
+    address->sin_addr.s_addr = INADDR_ANY;
+    address->sin_port = htons(PORT);
 
     // Forcefully attaching socket to the port 8080
-    if (bind(server_fd, (struct sockaddr *)&address,
-             sizeof(address)) < 0)
+    if (bind(*socketInit, (struct sockaddr *)address,
+             sizeof(struct sockaddr)) < 0)
     {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    if (listen(server_fd, 3) < 0)
+    if (listen(*socketInit, 3) < 0)
     {
         perror("listen");
         exit(EXIT_FAILURE);
     }
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
-                             (socklen_t *)&addrlen)) < 0)
+    printf("\nServer Waiting for client connection...\n");
+    fflush(stdout);
+}
+void connect_accept(fd_set *master, int *fdmax, int *socketNew, int socketInit, int addressLength, struct sockaddr_in *client_addr)
+{
+    if ((*socketNew = accept(socketInit, (struct sockaddr *)&client_addr,
+                             (socklen_t *)&addressLength)) < 0)
     {
         perror("accept");
         exit(EXIT_FAILURE);
     }
+    else
+    {
+        FD_SET(*socketNew, master);
+        if (*socketNew > *fdmax)
+        {
+            *fdmax = *socketNew;
+        }
+        printf("\n==Client connection request recieved.==\n");
+    }
+    headerprinted = 0;
+}
 
-    strcpy(district, "");
+void createSession(char *clientDetails, char *username, char *district);
 
-    //save username and district for reference and more functions
-    valread = recv(new_socket, username, 20, 0);
-    printf("*******************************\n");
-    printf("Starting new Session:\n");
-    printf("=======================\n");
+void attendtoClient(int new_socket, char *username, char *buffer);
+
+int main(int argc, char const *argv[])
+{
+
+    int new_socket;
+    struct sockaddr_in address, client_addr;
+    int addrlen = sizeof(address);
+    char buffer[1024] = {0};
+
+    char district[12] = {0};
+    char username[12] = {0};
+    
+    //fd_set master; //declared globally instead, since it has to be modified in global function
+    fd_set read_fds;
+    int i;
+
+    sockfd = 0;
+    nsockfd = 0;
+    FD_ZERO(&master);
+    FD_ZERO(&read_fds);
+    connect_await(&sockfd, &address);
+
+    FD_SET(sockfd, &master);
+    fdmax = sockfd;
+
+    while (1)
+    {
+        read_fds = master;
+        if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1)
+        {
+            perror("select");
+            exit(4);
+        }
+
+        for (i = 0; i <= fdmax; i++)
+        {
+            if (FD_ISSET(i, &read_fds))
+            {
+                if (i == sockfd)
+                    connect_accept(&master, &fdmax, &nsockfd, sockfd, addrlen, &client_addr);
+                else
+                {
+                    int nbytes_recvd;
+                    new_socket = nsockfd;
+                    char clientDetails[1024] = {0};
+                    strcpy(district, "");
+
+                    if ((nbytes_recvd = read(i, clientDetails, sizeof(clientDetails))) <= 0)
+                    {
+                        if (nbytes_recvd == 0)
+                        {
+                            printf("Socket %d has closed unexpectedly!!\n", new_socket);
+                            printf("***********************************\n");
+                            printf("\nServer Waiting for client connection...\n");
+                        }
+                        else
+                        {
+                            perror("session");
+                        }
+                        close(new_socket);
+                        FD_CLR(new_socket, &master);
+                    }
+                    else
+                    {
+
+                        createSession(clientDetails, username, district);
+
+                        attendtoClient(new_socket, username, buffer);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void createSession(char *clientDetails, char *username, char *district)
+{
+    if (headerprinted == 0)
+    {
+        printf("*******************************\n");
+        printf("Starting new Session:\n");
+        printf("=======================\n");
+        headerprinted = 1;
+    }
+
+    char *usernameTemp1, *districtTemp1;
+    char clientDetailsCopy1[1024] = {0};
+    char clientDetailsCopy2[1024] = {0};
+
+    //Create 2 copys of client details.
+    strcpy(clientDetailsCopy1, clientDetails);
+    strcpy(clientDetailsCopy2, clientDetails);
+
+    //Extract username from clientDetailsCopy1.
+    usernameTemp1 = strtok(clientDetailsCopy1, "\n");
+    strcpy(username, usernameTemp1);
+
+    //Extracting district from clientDetailsCopy2.
+    districtTemp1 = strchr(clientDetailsCopy2, '\n');
+    districtTemp1 += 1;
+    strcpy(district, districtTemp1);
+
     printf("Health Officer : %s\n", username);
-    //	strcpy(t.name, username);
-    valread = recv(new_socket, district, 8, 0);
     printf("District : %s\n", district);
 
-    result6 = strcat(district, ".txt");
+    filename = strcat(district, ".txt");
+}
 
-    fp = fopen(result6, "a");
-    if (!fp)
+void attendtoClient(int new_socket, char *username, char *buffer)
+{
+
+    int valread;
+    char *result;
+    char *result1;
+    char *result2;
+    char *result3;
+    char result4[1024] = "";
+    int length;
+    FILE *fp, *fPt;
+    char *server_resp = {0};
+    char reading[1024] = "";
+    char reading1[1024] = "";
+
+    //This if is to ensure a non empty filename is used.
+    if (strlen(filename) > 4)
     {
-        printf("Something wrong\n");
+        fp = fopen(filename, "a");
+        if (!fp)
+        {
+            printf("Failed to open file. Possibly invalid file name\n");
+        }
+        fclose(fp);
     }
-    fclose(fp);
 
     do
     {
@@ -130,8 +230,8 @@ int main(int argc, char const *argv[])
                 {
                     printf("Something wrong: Can't find file!\n");
 
-                    hello = "File cannot be found!";
-                    send(new_socket, hello, strlen(hello), 0);
+                    server_resp = "File cannot be found!";
+                    send(new_socket, server_resp, strlen(server_resp), 0);
                 }
                 else
                 {
@@ -144,7 +244,7 @@ int main(int argc, char const *argv[])
                     }
                     fclose(fp);
 
-                    fp = fopen(result6, "a");
+                    fp = fopen(filename, "a");
                     if (!fp)
                     {
                         printf("Something wrong: Failed to open district file\n");
@@ -155,8 +255,8 @@ int main(int argc, char const *argv[])
                         fclose(fp);
 
                         printf("\n%s Successful\n", buffer);
-                        hello = "Addpatient list Successful";
-                        send(new_socket, hello, strlen(hello), 0);
+                        server_resp = "Addpatient list Successful";
+                        send(new_socket, server_resp, strlen(server_resp), 0);
                     }
                 }
             }
@@ -179,14 +279,12 @@ int main(int argc, char const *argv[])
                 //replacefirstcharWithString(result4,",", "\t");
                 printf("%s\n", result4);
 
-                fp = fopen(result6, "a+");
+                fp = fopen(filename, "a+");
                 fseek(fp, 12, SEEK_SET);
                 if (!fp)
                 {
                     printf("Something wrong\n");
                 }
-                agentname = ",";
-                //strcat(honame, username);
 
                 int detailsLen = strlen(result4);
                 //the newline character from the details so ass to concat HO's name
@@ -201,18 +299,18 @@ int main(int argc, char const *argv[])
                 strcpy(result4, ""); //reseting the string
 
                 printf("Addpatient Successful\n");
-                hello = "Addpatient Successful";
-                send(new_socket, hello, strlen(hello), 0);
+                server_resp = "Addpatient Successful";
+                send(new_socket, server_resp, strlen(server_resp), 0);
             }
         }
         else if (result = strstr(buffer, "Check_status"))
         {
-            fp = fopen(result6, "r");
+            fp = fopen(filename, "r");
             if (!fp)
             {
                 printf("Failed to open dstrict file to check status\n");
-                hello = "District file missing.\nFailed to check status\n";
-                send(new_socket, hello, strlen(hello), 0);
+                server_resp = "District file missing.\nFailed to check status\n";
+                send(new_socket, server_resp, strlen(server_resp), 0);
             }
             else
             {
@@ -251,12 +349,12 @@ int main(int argc, char const *argv[])
             int count = 0; //array index counter
 
             //get each line
-            fp = fopen(result6, "r");
+            fp = fopen(filename, "r");
             if (!fp)
             {
                 printf("Failed to open dstrict file for search\n");
-                hello = "District file missing.\nFailed to check status\n";
-                send(new_socket, hello, strlen(hello), 0);
+                server_resp = "District file missing.\nFailed to check status\n";
+                send(new_socket, server_resp, strlen(server_resp), 0);
             }
             else
             {
@@ -324,32 +422,39 @@ int main(int argc, char const *argv[])
         }
         else if (result = strstr(buffer, "exit"))
         {
-            printf("\nClosing session on client request\n");
-            hello = "exit";
-            send(new_socket, hello, strlen(hello), 0);
+            printf("\nClosing session on client(%d) request\n", new_socket);
+            printf("**************************************\n");
+            printf("\nServer Waiting for client connection...\n");
+
+            server_resp = "exit";
+            send(new_socket, server_resp, strlen(server_resp), 0);
+            close(new_socket);
+            FD_CLR(new_socket, &master);
             break;
         }
-        else if (result = strstr(buffer, ""))
+        else if (strcmp(buffer, "") == 0)
         {
-            //impelement code to keep the server running
-            //waiting for a new connection after the client closes.
-            //for now it just terminates
-            //removing the code below causes an infinite loop
+            //Checks if socket closed
             printf("\nClosed\n");
-            break; //adding this break exits the loop
+            //Breaks from loop for attending to client
+            //in order to request for a new session.
+            break;
         }
         else
         {
-            printf("\nInvalid command recieved.");
-            printf("\n(%s)", buffer);
-            hello = "\nInvalid command!.\nPlease try again";
-            send(new_socket, hello, strlen(hello), 0);
+            //Run if an invalid command is recieved.
+            if (strstr(buffer, "\n"))
+            {
+                buffer[strcspn(buffer, "\n")] = 0;
+            }
+
+            printf("\nInvalid command recieved.\n");
+            printf("Ignoring-(%s)\n", buffer);
+            server_resp = "\nInvalid command!.\nPlease refer to list above for accepted commands!";
+            send(new_socket, server_resp, strlen(server_resp), 0);
         }
 
-        //remove the new line from command(buffer) to check if its exit
-        //buffer[strcspn(buffer, "\n")] = 0;
-    } while ((strcmp(buffer, "Exit") != 0) && (strcmp(buffer, "exit") != 0));
-    //return 0;
+    } while ((strcmp(buffer, "exit") != 0));
 }
 
 void replaceeverychar(char *str, char oldChar, char newChar)

@@ -1,6 +1,3 @@
-//TODO: Where command is entered. add a console output
-//requesting user for input
-//not just a blank as it is now
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -44,33 +41,45 @@ int main(int argc, char const *argv[])
 		return -1;
 	}
 
-	printf("Health Oficer Username:");
+	printf("Starting session with server...\n");
+	printf("Health Oficer Username: ");
 	scanf(" %s", username);
 	getchar();
-	send(sock, username, strlen(username), 0);
-	printf("Your District:");
+	
+	strcat(message, username);
+    strcat(message, "\n");
+
+	//send(sock, username, strlen(username), 0);
+	printf("Your District: ");
 	scanf(" %s", district);
 	getchar();
-	send(sock, district, strlen(district), 0);
+
+	strcat(message, district);
+
+	send(sock, message, strlen(message), 0);
 	printf("\n");
 
 	//Adding provision for a Client user to type a message
-	printf("Please Enter A Command\n");
+	printf("The following are the commands :\n");
 	printf("----------------------------------------------------------------\n");
-	printf("Please use commnads exactly as they appear!!\n");
-	printf("1) To register a patient: Addpatient patient_name(Tonny_Trevor),date(YYYY-MM-DD),gender(M/F),status(A/S)\n");
+	printf("Please use commands exactly as they appear!!\n");
+	printf("1) To register a patient: Addpatient patient_name(Sirname_Firstname),date(YYYY-MM-DD),gender(M/F),status(A/S)\n");
+	printf("\te.g Addpatient Tonny_Trevor,YYYY-MM-DD,M,S\n");
 	printf("2) To submit new patients from a file: Addpatient filename.txt\n");
 	printf("3) To check status of the file: Check_status\n");
 	printf("4) To Search for records by name or date: Search criteria \n\te.g Search Tonny_Baw or Search 2021-01-28\n");
 	printf("5) To End session: exit\n");
 	printf("----------------------------------------------------------------\n");
 
+	strcpy(message, "");
 	do
 	{
+		printf("\nEnter command : ");
 		fgets(message, 1024, stdin); //gets commands from the client
 
 		length = strlen(message);
 		send(sock, message, strlen(message), 0); //sends commands to the server
+		strcpy(message, "");
 
 		printf("Command Sent!\n");
 		valread = recv(sock, buffer, 1024, 0);
@@ -83,6 +92,7 @@ int main(int argc, char const *argv[])
 		}
 		else
 		{
+			close(sock);
 			//close connection if server response is exit
 			return 0;
 		}
@@ -91,5 +101,6 @@ int main(int argc, char const *argv[])
 		//command(message) is exit
 		//message[strcspn(message, "\n")] = 0;
 	} while ((strcmp(message, "Exit") != 0) && (strcmp(message, "exit") != 0));
+	close(sock);
 	return 0;
 }
