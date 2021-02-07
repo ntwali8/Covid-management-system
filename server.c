@@ -292,9 +292,10 @@ void attendtoClient(int new_socket, char *username, char *buffer)
                     result4[detailsLen - 1] = ',';
                 //attach HO's name to the patient details
                 strcat(result4, username);
+                strcat(result4, "\n");//add new line character to details
                 //replace teh comma delimeter with a space.
                 replaceeverychar(result4, ',', ' ');
-                fprintf(fp, "\n%s", result4); //adding the files to the patient file
+                fprintf(fp, "%s", result4); //adding the files to the patient file
                 fclose(fp);
                 strcpy(result4, ""); //reseting the string
 
